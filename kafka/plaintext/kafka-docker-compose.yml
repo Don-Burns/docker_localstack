@@ -1,0 +1,110 @@
+version: '3.7'
+
+x-kafka-defaults:
+  &kafka-defaults
+  image: confluentinc/cp-server:${KAFKA_VERSION}
+  depends_on:
+    - zookeeper
+
+x-kafka-environment-defaults:
+  &kafka-environment-defaults
+  KAFKA_ZOOKEEPER_CONNECT: '${KAFKA_ZOOKEEPER_NAME}:2181'
+  KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+  KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 2
+  KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+  KAFKA_CONFLUENT_LICENSE_TOPIC_REPLICATION_FACTOR: 1
+  KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+  KAFKA_LOG4J_ROOT_LOGLEVEL: WARN
+  KAFKA_TOOLS_LOG4J_LOGLEVEL: ERROR
+  KAFKA_LOG4J_LOGGERS: "org.apache.zookeeper=ERROR,org.apache.kafka=ERROR,kafka=ERROR,kafka.cluster=ERROR,kafka.controller=ERROR,kafka.coordinator=ERROR,kafka.log=ERROR,kafka.server=ERROR,kafka.zookeeper=ERROR,state.change.logger=ERROR,kafka.controller=WARN,kafka.foo.bar=DEBUG"
+  KAFKA_NUM_PARTITIONS: 3
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:${KAFKA_VERSION}
+    hostname: ${KAFKA_ZOOKEEPER_NAME}
+    container_name: ${KAFKA_ZOOKEEPER_NAME}
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka1:
+    <<: *kafka-defaults
+    hostname: ${KAFKA_CONTAINER_NAME}1
+    container_name: ${KAFKA_CONTAINER_NAME}1
+    ports:
+      - "19092:19092"
+    environment:
+      <<: *kafka-environment-defaults
+      KAFKA_BROKER_ID: 1
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://${KAFKA_CONTAINER_NAME}1:9092,PLAINTEXT_HOST://localhost:19092
+
+  kafka2:
+    <<: *kafka-defaults
+    hostname: ${KAFKA_CONTAINER_NAME}2
+    container_name: ${KAFKA_CONTAINER_NAME}2
+    ports:
+      - "29092:29092"
+    environment:
+      <<: *kafka-environment-defaults
+      KAFKA_BROKER_ID: 2
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://${KAFKA_CONTAINER_NAME}2:9092,PLAINTEXT_HOST://localhost:29092
+
+  kafka3:
+    <<: *kafka-defaults
+    hostname: ${KAFKA_CONTAINER_NAME}3
+    container_name: ${KAFKA_CONTAINER_NAME}3
+    ports:
+      - "39092:39092"
+    environment:
+      <<: *kafka-environment-defaults
+      KAFKA_BROKER_ID: 3
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://${KAFKA_CONTAINER_NAME}3:9092,PLAINTEXT_HOST://localhost:39092
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:${KAFKA_VERSION}
+    hostname: ${KAFKA_SCHEMAREGISTRY_NAME}
+    container_name: ${KAFKA_SCHEMAREGISTRY_NAME}
+    depends_on:
+      - kafka1
+      - kafka2
+      - kafka3
+    ports:
+      - "8081:8081"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: ${KAFKA_SCHEMAREGISTRY_NAME}
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: '${KAFKA_CONTAINER_NAME}1:9092,${KAFKA_CONTAINER_NAME}2:9092,${KAFKA_CONTAINER_NAME}3:9092'
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+      SCHEMA_REGISTRY_DEBUG: 'true'
+      SCHEMA_REGISTRY_SCHEMA_COMPATIBILITY_LEVEL: ${KAFKA_SCHEMAREGISTRY_COMPATIBILITY_LEVEL}
+
+  schema-registry-ui:
+    image: landoop/schema-registry-ui:latest
+    container_name: ${KAFKA_SCHEMAREGISTRYUI_NAME}
+    depends_on:
+      - schema-registry
+    ports:
+      - "8082:8000"
+    environment:
+      SCHEMAREGISTRY_URL: http://${KAFKA_SCHEMAREGISTRY_NAME}:8081
+      PROXY: 'true'
+      ALLOW_GLOBAL: 1
+      ALLOW_TRANSITIVE: 1
+      ALLOW_DELETION: 1
+      READONLY_MODE: 1
+
+  kafdrop:
+    image: obsidiandynamics/kafdrop:latest
+    container_name: ${KAFKA_KAFDROP_NAME}
+    ports:
+      - "9000:9000"
+    environment:
+      KAFKA_BROKERCONNECT: '${KAFKA_CONTAINER_NAME}1:9092,${KAFKA_CONTAINER_NAME}2:9092,${KAFKA_CONTAINER_NAME}3:9092'
+      JVM_OPTS: '-Xms16M -Xmx48M -Xss180K -XX:-TieredCompilation -XX:+UseStringDeduplication -noverify'
+      CMD_ARGS: '--message.format=AVRO --schemaregistry.connect=http://${KAFKA_SCHEMAREGISTRY_NAME}:8081'
+    depends_on:
+      - kafka1
+      - kafka2
+      - kafka3
