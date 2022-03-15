@@ -6,9 +6,15 @@ name = "pypi"
 [packages]
 kafka-python = "*"
 wheel = "*"
-pytest = "*"
+setuptools = "*"
+pylint = "*"
 
 [dev-packages]
+pytest = "*"
+autopep8 = "*"
 
 [requires]
 python_version = "3.9"
+
+[pipenv]
+allow_prereleases = true
