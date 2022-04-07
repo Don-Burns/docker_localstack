@@ -1,0 +1,36 @@
+#!/usr/bin/groovy
+//not to commit
+def ENV = 'dev'
+
+pipeline {
+    agent any
+
+
+
+    stages {
+        stage("declare vars"){
+            steps{
+                script{
+                    TARGETENV=ENV
+                }
+            }
+        }
+        stage('Build') {
+            steps {
+                echo 'Building..'
+                sh """ echo ${TARGETENV} """ //works
+            }
+        }
+        stage('Test') {
+            steps {
+                echo 'Testing..'
+                echo 'tseting in ${TARGETENV} ' // does not work
+            }
+        }
+        stage('Deploy') {
+            steps {
+                echo 'Deploying....'
+            }
+        }
+    }
+}
