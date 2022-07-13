@@ -1,0 +1,17 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+boto3 = "*"
+requests = "*"
+
+[dev-packages]
+black = "*"
+pylint = "*"
+pytest = "*"
+responses = "*"
+
+[requires]
+python_version = "3.7"

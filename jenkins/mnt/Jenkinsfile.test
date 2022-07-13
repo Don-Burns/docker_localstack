@@ -1,36 +1,80 @@
 #!/usr/bin/groovy
-//not to commit
-def ENV = 'dev'
+def LGC_ENV = '#DEVELOPMENT#' 
+def LGC_ENV_SHORT = '#DEV#'
+// the base bucket to deploy to minus repo name
+def EMR_BUCKET_NAME = 'de-emr-code' 
+def REPO_NAME = 'de-etl-s3-to-redshift' 
+// location to send DAGs
+def AIRFLOW_DAG_BUCKET_STEM = 'lgc-de-scheduler' 
+// def EMR_CODE_BUCKET ="s3://${LGC_ENV.toLowerCase()}-${EMR_BUCKET_NAME}/${REPO_NAME}/"
+def EMR_CODE_BUCKET = "s3://emr-kafka-poc/cicd_test/${REPO_NAME}"
+def AIRFLOW_DAG_DIR = 'airflow/dags'
+// def AIRFLOW_DAG_BUCKET = "s3://${AIRFLOW_DAG_BUCKET_STEM}-${LGC_ENV_SHORT.toLowerCase()}/dags/${REPO_NAME}/"
+def AIRFLOW_DAG_BUCKET = "s3://emr-kafka-poc/cicd_test/airflow/dags/${REPO_NAME}"
+// name for the conda env before being zipped to avoid clashes in deploys on the jenkins machine
+def PY_ENV_S3_NAME = "py_env"
+def PY_ENV_JENKINS_NAME = "${LGC_ENV}_${REPO_NAME}_${PY_ENV_S3_NAME}"
+
+def cleanup =  {
+  echo 'cleaning-up'
+    // sh """
+    //     conda env remove -n ${PY_ENV_JENKINS_NAME}
+    //     rm -rf ./${PY_ENV_S3_NAME}.tar.gz
+    // """
+}
 
 pipeline {
+    options {
+      buildDiscarder(logRotator(numToKeepStr:'10'))
+      timeout (time: 180, unit: 'MINUTES')
+      ansiColor('xterm')
+    }
+    environment {        
+      SUPPORT_GROUP     = 'devops@letsgetchecked.com'
+      AWS_ACC_ID        = sh(returnStdout:true, script: 'aws sts get-caller-identity --output text --query "Account"').trim()
+    }
+
     agent any
-
-
+    // agent {
+    //     // node {
+    //     //     label "master"
+    //     // }
+    //     ecs {
+            
+    //         inheritFrom "ecs-devqa-use"
+    //         image "022176827839.dkr.ecr.eu-west-1.amazonaws.com/jenkins-agent-de-pyspark-cicd:latest"
+    //     }
+    // }
 
     stages {
-        stage("declare vars"){
+        
+        stage("build python env"){
             steps{
-                script{
-                    TARGETENV=ENV
+                // conda env names prefixed with repo to avoid clashing with other conda build processes.
+        	    echo 'Creating conda python env'
+                sh """
+                    conda env create -f ./conda_requirements.yml -n ${PY_ENV_JENKINS_NAME}
+                    conda-pack -n ${PY_ENV_JENKINS_NAME} -o ./${PY_ENV_S3_NAME}.tar.gz
+                """
+            }
+        }
+
+        stage('SYNC: Sync to S3 bucket') {
+        options {
+              timeout(time: 30, unit: 'MINUTES')
+          }
+        steps {
+           script {
+
+            input message: "Do you approve the sync from ${AIRFLOW_DAG_DIR} to  ${AIRFLOW_DAG_BUCKET} and all other code to ${EMR_CODE_BUCKET} ?", ok: 'Continue', submitterParameter: 'ConfigOK'
+          
+            sh """
+            aws s3 sync ${AIRFLOW_DAG_DIR} ${AIRFLOW_DAG_BUCKET} --delete
+            aws s3 sync ./ ${EMR_CODE_BUCKET} --exclude "airflow/dags/*" --exclude "cicd/*" --exclude ".git/*" --exclude ".gitignore" --delete
+            """
                 }
             }
         }
-        stage('Build') {
-            steps {
-                echo 'Building..'
-                sh """ echo ${TARGETENV} """ //works
-            }
-        }
-        stage('Test') {
-            steps {
-                echo 'Testing..'
-                echo 'tseting in ${TARGETENV} ' // does not work
-            }
-        }
-        stage('Deploy') {
-            steps {
-                echo 'Deploying....'
-            }
-        }
+
     }
 }

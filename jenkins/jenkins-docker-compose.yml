@@ -11,3 +11,7 @@ services:
       - 50000:50000
     volumes:
       - ./mnt:/var/jenkins_home/mnt
+      #jenkins user
+      - ~/.aws:/var/jenkins_home/.aws
+      #root user
+      - ~/.aws:/root/.aws

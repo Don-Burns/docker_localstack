@@ -7,9 +7,11 @@ name = "pypi"
 kafka-python = "*"
 wheel = "*"
 setuptools = "*"
-pylint = "*"
+pyspark = "*"
+apache-airflow = {version = "==2.0.2", extras = ["celery", "databricks", "docker", "oracle", "postgres", "presto", "sftp", "ssh", "tableau"]}
 
 [dev-packages]
+pylint = "*"
 pytest = "*"
 autopep8 = "*"
 

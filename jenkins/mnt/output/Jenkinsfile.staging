@@ -1,0 +1,152 @@
+#!/usr/bin/groovy
+//not to commit
+def LGC_ENV = 'STAGING' 
+def LGC_ENV_SHORT = 'STG'
+// the base bucket to deploy to minus repo name
+def EMR_BUCKET_NAME = 'de-emr-code' 
+def REPO_NAME = 'de-etl-s3-to-redshift' 
+// location to sen DAGs
+def AIRFLOW_DAG_BUCKET_STEM = 'lgc-de-scheduler' 
+// def EMR_CODE_BUCKET ="s3://${LGC_ENV.toLowerCase()}-${EMR_BUCKET_NAME}/${REPO_NAME}/"
+def EMR_CODE_BUCKET = "s3://emr-kafka-poc/cicd_test/${REPO_NAME}"
+def AIRFLOW_DAG_DIR = 'airflow/dags'
+// def AIRFLOW_DAG_BUCKET = "s3://${AIRFLOW_DAG_BUCKET_STEM}-${LGC_ENV_SHORT.toLowerCase()}/dags/${REPO_NAME}/"
+def AIRFLOW_DAG_BUCKET = "s3://emr-kafka-poc/cicd_test/airflow/dags/${REPO_NAME}"
+// name for the conda env before being zipped to avoid clashes in deploys on the jenkins machine
+def PY_ENV_S3_NAME = "py_env"
+def PY_ENV_JENKINS_NAME = "${LGC_ENV}_${REPO_NAME}_${PY_ENV_S3_NAME}"
+
+def cleanup =  {
+    sh """
+        conda env remove -n ${PY_ENV_JENKINS_NAME}
+        rm -rf ./${PY_ENV_S3_NAME}.tar.gz
+    """
+}
+pipeline {
+    // options {
+    //   buildDiscarder(logRotator(numToKeepStr:'10'))
+    //   timeout (time: 180, unit: 'MINUTES')
+    //   ansiColor('xterm')
+    // }
+    // environment {        
+    //   SUPPORT_GROUP     = 'devops@letsgetchecked.com'
+    //   AWS_ACC_ID        = sh(returnStdout:true, script: 'aws sts get-caller-identity --output text --query "Account"').trim()
+    // }
+
+    // agent {
+    //     node {
+    //         label "master"
+    //     }
+    // }
+    agent any // for local testing
+
+    stages {
+    //   stage ('CHECK: Env Variables and Approval') {
+    //         steps {
+    //             script {
+    //                 println "${AWS_ACC_ID}"
+    //                 switch (AWS_ACC_ID) {
+    //                     case "022176827839":
+    //                         RUNJENKINS = "Jenkins-Transit"
+    //                         println "Jenkins is: ${RUNJENKINS}"
+    //                     break
+    //                     default:
+    //                         error "Error: You should run this pipeline on Transit account. Found Account ID: ${AWS_ACC_ID}"
+    //                     break
+    //                 }
+    //                 // RESOURCE_PREFIX = LGC_ENV_SHORT.toLowerCase()
+    //                 LGC_DEPLOY_ENV = LGC_ENV_SHORT
+    //                 println "Deployment Environment is: ${LGC_DEPLOY_ENV}"
+    //                 assumeRole([name: "${LGC_DEPLOY_ENV}"])
+    //             }
+    //         }
+    //     }
+
+        stage("Ensure Jenkins Dir is Clean"){
+            // to make sure there are no lingering files in the Jenkins folder that might cause conflicts
+            steps{
+                echo 'Cleaning env before execution'
+                script{cleanup()}
+            }
+        }
+
+        // stage('setup miniconda') {
+        //     steps {
+        // // manually install conda - not desirable to do each build
+        //         // #download miniconda
+        //         // wget https://repo.anaconda.com/miniconda/Miniconda3-py38_4.11.0-Linux-x86_64.sh -O miniconda.sh
+        //         // bash miniconda.sh -b -p $WORKSPACE/miniconda
+        //         sh """#!/usr/bin/env bash
+        //         source $WORKSPACE/miniconda/etc/profile.d/conda.sh
+        //         #install conda pack
+        //         conda install -y conda-pack
+        //         """
+        //          conda env create -f environment.yml
+        //          # Useful for debugging any issues with conda
+        //          conda info -a
+        //          hash -r
+        //          conda config --set always_yes yes --set changeps1 no
+        //          conda update -q conda
+        //          # create env
+        //          conda init bash
+        //     }
+        // }
+        
+        stage("build python env"){
+            steps{
+                // remove any existing files that may clash, can be left if the pipeline crashed for example then build the envs
+                // conda env names prefixed with repo to avoid clashing with other conda processes.
+        	    echo 'Creating conda python env'
+                sh """
+                    #stream_task
+                    conda env create -f environment.yml -n ${PY_ENV_JENKINS_NAME}
+                    conda-pack -n ${PY_ENV_JENKINS_NAME} -o ./${PY_ENV_S3_NAME}.tar.gz
+                """
+            }
+
+        }
+
+        stage('Build') {
+            steps {
+                echo 'Building..'
+                sh """ echo ${EMR_CODE_BUCKET} """ //works
+            }
+        }
+        stage('Test') {
+            steps {
+                echo 'Testing..'
+                sh """echo 'testing in ${AIRFLOW_DAG_BUCKET}'""" // does not work
+            }
+        }
+        stage('cat workspace') {
+            steps {
+                sh """echo ${WORKSPACE}"""
+            }
+        }
+
+        stage('SYNC: Sync to S3 bucket') {
+        options {
+              timeout(time: 30, unit: 'MINUTES')
+          }
+        steps {
+           script {
+
+            input message: "Do you approve the sync from ${AIRFLOW_DAG_DIR} to  ${AIRFLOW_DAG_BUCKET} and all other code to ${EMR_CODE_BUCKET} ?", ok: 'Continue', submitterParameter: 'ConfigOK'
+          
+            sh """
+            aws s3 sync ${AIRFLOW_DAG_DIR} ${AIRFLOW_DAG_BUCKET} --delete
+            aws s3 sync ./ ${EMR_CODE_BUCKET} --delete --exclude ${AIRFLOW_DAG_DIR}/*
+            """
+                }
+            }
+        }
+
+        stage("Clean up"){
+            // Cleanup any generated files that are not part of source code
+            steps{
+                script{cleanup()}
+            }
+        }
+
+    }
+}

@@ -175,3 +175,4 @@ cython_debug/
 !airflow/.env
 !kafka/plaintext/.env
 !kafka/sasl-scram/.env
+!spark/.env

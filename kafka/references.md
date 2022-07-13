@@ -1,0 +1,2 @@
+Kafka docs using their repo
+- https://docs.confluent.io/3.3.0/installation/docker/docs/tutorials/clustered-deployment-sasl.html#docker-compose-setting-up-a-three-node-confluent-platform-cluster-with-sasl

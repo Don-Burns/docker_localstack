@@ -1,0 +1,17 @@
+name: stream_task
+channels:
+  - conda-forge
+dependencies:
+  - python==3.7
+  - pip==22.0.4
+  # Add here any pip specific dependencies
+  - pip:
+    # - wheel
+    - requests==2.27.1
+    # - python-schema-registry-client==2.2.2
+    # - kafka-python==2.0.2
+    # - avro==1.11.0
+    # - boto3==1.20.51
+    # - confluent-kafka==1.8.2
+    # - pytest==7.0.1
+
