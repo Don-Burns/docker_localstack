@@ -1,0 +1,6 @@
+pytest
+boto3
+ipykernel
+pylint
+black
+boto3-stubs[s3,sqs]

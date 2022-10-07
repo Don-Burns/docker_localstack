@@ -1,0 +1,1 @@
+docker-compose -f pytest.docker-compose.yml up -d --build
