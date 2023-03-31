@@ -2,7 +2,7 @@ version: '3.7'
 
 services:
   jenkins:
-    build: 
+    build:
       context: ./
       dockerfile: jenkins.Dockerfile
     container_name: jenkins
@@ -10,7 +10,7 @@ services:
       - 8080:8080
       - 50000:50000
     volumes:
-      - ./mnt:/var/jenkins_home/mnt
+      - ./mnt:/var/jenkins_home/mnt/cicd
       #jenkins user
       - ~/.aws:/var/jenkins_home/.aws
       #root user
